@@ -24,13 +24,13 @@ class CycleGANModel(BaseModel):
                                         opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids)
 
         if self.isTrain:
-            use_sigmoid = opt.c_loss
+            c_loss = opt.c_loss
             self.netD_A = networks.define_D(opt.output_nc, opt.ndf,
                                             opt.which_model_netD,
-                                            opt.n_layers_D, opt.norm, use_sigmoid, opt.init_type, self.gpu_ids)
+                                            opt.n_layers_D, opt.norm, c_loss, opt.init_type, self.gpu_ids)
             self.netD_B = networks.define_D(opt.input_nc, opt.ndf,
                                             opt.which_model_netD,
-                                            opt.n_layers_D, opt.norm, use_sigmoid, opt.init_type, self.gpu_ids)
+                                            opt.n_layers_D, opt.norm, c_loss, opt.init_type, self.gpu_ids)
         if not self.isTrain or opt.continue_train:
             which_epoch = opt.which_epoch
             self.load_network(self.netG_A, 'G_A', which_epoch)
@@ -44,8 +44,16 @@ class CycleGANModel(BaseModel):
             self.fake_B_pool = ImagePool(opt.pool_size)
             # define loss functions
             self.criterionGAN = networks.GANLoss(c_loss= opt.c_loss, tensor=self.Tensor)
-            self.criterionCycle = networks.GANLoss(r_loss= opt.r_loss,tensor=self.Tensor)
-            self.criterionIdt = networks.GANLoss(r_loss= opt.r_loss,tensor=self.Tensor)
+            if opt.r_loss=='l1':
+                self.criterionCycle = torch.nn.L1Loss()
+                self.criterionIdt = torch.nn.L1Loss()
+            elif opt.r_loss=='huber':
+                self.criterionCycle = torch.nn.SmoothL1Loss()
+                self.criterionIdt = torch.nn.SmoothL1Loss()
+            else:
+                self.criterionCycle = torch.nn.MSELoss()
+                self.criterionIdt = torch.nn.MSELoss()
+
             # initialize optimizers
             self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()),
                                                 lr=opt.lr, betas=(opt.beta1, 0.999))
@@ -103,7 +111,10 @@ class CycleGANModel(BaseModel):
         loss_D_real = self.criterionGAN(pred_real, True)
         # Fake
         pred_fake = netD(fake.detach())
-        loss_D_fake = self.criterionGAN(pred_fake, False)
+        if self.opt.c_loss in ('hinge','log'):
+            loss_D_fake = self.criterionGAN(pred_fake, -1)
+        else:
+            loss_D_fake = self.criterionGAN(pred_fake, False)
         # Combined loss
         loss_D = (loss_D_real + loss_D_fake) * 0.5
         # backward
