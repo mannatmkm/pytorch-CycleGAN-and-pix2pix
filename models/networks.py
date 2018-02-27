@@ -163,7 +163,7 @@ def print_network(net):
 # but it abstracts away the need to create the target label tensor
 # that has the same size as the input
 class GANLoss(nn.Module):
-    def __init__(self, use_lsgan=True, target_real_label=1.0, target_fake_label=0.0,
+    def __init__(self, c_loss='bce', r_loss='l1', target_real_label=1.0, target_fake_label=0.0,
                  tensor=torch.FloatTensor):
         super(GANLoss, self).__init__()
         self.real_label = target_real_label
@@ -171,10 +171,20 @@ class GANLoss(nn.Module):
         self.real_label_var = None
         self.fake_label_var = None
         self.Tensor = tensor
-        if use_lsgan:
+        if c_loss=='mse':
             self.loss = nn.MSELoss()
-        else:
+        elif c_loss=='bce':
             self.loss = nn.BCELoss()
+        elif c_loss=='hinge':
+            self.loss = nn.HingeEmbeddingLoss()
+        else:
+            self.loss = nn.SoftMarginLoss()
+        if r_loss=='l1':
+           self.loss = nn.L1Loss()
+        elif r_loss=='huber':
+             self.loss= nn.SmoothL1Loss()
+        else:
+            self.loss= nn.MSELoss()
 
     def get_target_tensor(self, input, target_is_real):
         target_tensor = None
